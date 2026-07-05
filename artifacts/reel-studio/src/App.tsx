@@ -5,12 +5,13 @@ import { TooltipProvider } from '@/components/ui/tooltip';
 import NotFound from '@/pages/not-found';
 import { Shell } from '@/components/layout/Shell';
 
-// Pages
 import Dashboard from '@/pages/Dashboard';
 import CreateReel from '@/pages/CreateReel';
 import Library from '@/pages/Library';
 import Schedule from '@/pages/Schedule';
 import Templates from '@/pages/Templates';
+import Connect from '@/pages/Connect';
+import Strategy from '@/pages/Strategy';
 
 const queryClient = new QueryClient();
 
@@ -18,11 +19,13 @@ function Router() {
   return (
     <Shell>
       <Switch>
-        <Route path="/" component={Dashboard} />
-        <Route path="/create" component={CreateReel} />
-        <Route path="/library" component={Library} />
-        <Route path="/schedule" component={Schedule} />
+        <Route path="/"          component={Dashboard} />
+        <Route path="/create"    component={CreateReel} />
+        <Route path="/library"   component={Library} />
+        <Route path="/schedule"  component={Schedule} />
         <Route path="/templates" component={Templates} />
+        <Route path="/connect"   component={Connect} />
+        <Route path="/strategy"  component={Strategy} />
         <Route component={NotFound} />
       </Switch>
     </Shell>

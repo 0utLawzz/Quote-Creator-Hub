@@ -4,6 +4,7 @@ import reelsRouter from "./reels";
 import templatesRouter from "./templates";
 import schedulesRouter from "./schedules";
 import quotesRouter from "./quotes";
+import socialRouter from "./social";
 
 const router: IRouter = Router();
 
@@ -12,5 +13,6 @@ router.use(reelsRouter);
 router.use(templatesRouter);
 router.use(schedulesRouter);
 router.use(quotesRouter);
+router.use("/social", socialRouter);
 
 export default router;

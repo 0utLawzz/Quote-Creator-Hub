@@ -1,14 +1,19 @@
 import * as React from "react";
 import { Link, useLocation } from "wouter";
-import { LayoutDashboard, PenTool, Library, CalendarDays, Layers, Clapperboard } from "lucide-react";
+import { LayoutDashboard, PenTool, Library, CalendarDays, Layers, Clapperboard, Wifi, TrendingUp } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const navigation = [
-  { name: "Dashboard", href: "/", icon: LayoutDashboard },
-  { name: "Create Reel", href: "/create", icon: PenTool },
-  { name: "Library", href: "/library", icon: Library },
-  { name: "Schedule", href: "/schedule", icon: CalendarDays },
-  { name: "Templates", href: "/templates", icon: Layers },
+  { name: "Dashboard",   href: "/",          icon: LayoutDashboard },
+  { name: "Create Reel", href: "/create",     icon: PenTool },
+  { name: "Library",     href: "/library",    icon: Library },
+  { name: "Schedule",    href: "/schedule",   icon: CalendarDays },
+  { name: "Templates",   href: "/templates",  icon: Layers },
+];
+
+const bottomNavigation = [
+  { name: "Growth Guide",    href: "/strategy", icon: TrendingUp },
+  { name: "Social Connect",  href: "/connect",  icon: Wifi },
 ];
 
 export function Sidebar() {
@@ -43,15 +48,36 @@ export function Sidebar() {
             >
               <item.icon
                 size={18}
-                className={cn(
-                  "transition-colors",
-                  isActive ? "text-primary" : "text-sidebar-foreground/60"
-                )}
+                className={cn("transition-colors", isActive ? "text-primary" : "text-sidebar-foreground/60")}
               />
               {item.name}
             </Link>
           );
         })}
+
+        <div className="pt-4 mt-4 border-t border-sidebar-border/30 space-y-1.5">
+          {bottomNavigation.map((item) => {
+            const isActive = location === item.href;
+            return (
+              <Link
+                key={item.name}
+                href={item.href}
+                className={cn(
+                  "flex items-center gap-3 px-3 py-2.5 rounded-md text-sm font-medium transition-all duration-200",
+                  isActive
+                    ? "bg-primary/10 text-primary border border-primary/20"
+                    : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+                )}
+              >
+                <item.icon
+                  size={18}
+                  className={cn("transition-colors", isActive ? "text-primary" : "text-sidebar-foreground/60")}
+                />
+                {item.name}
+              </Link>
+            );
+          })}
+        </div>
       </nav>
 
       <div className="p-6 border-t border-sidebar-border/50">
