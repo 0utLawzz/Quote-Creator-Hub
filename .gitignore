@@ -41,10 +41,9 @@ testem.log
 .DS_Store
 Thumbs.db
 
-# Environment variables — never commit secrets
-.env
-.env.local
-.env.*.local
+.cursor/rules/nx-rules.mdc
+.github/instructions/nx.instructions.md
 
-# Vercel
-.vercel
+# Replit
+.cache/
+.local/
