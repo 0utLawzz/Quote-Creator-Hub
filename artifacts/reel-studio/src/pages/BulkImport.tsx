@@ -1,10 +1,10 @@
 import * as React from "react";
 import { useState, useRef, useCallback } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { useCreateReel, getListReelsQueryKey, getGetRecentReelsQueryKey, getGetStatsQueryKey } from "@workspace/api-client-react";
+import { useCreateReel, useListReels, getListReelsQueryKey, getGetRecentReelsQueryKey, getGetStatsQueryKey } from "@workspace/api-client-react";
 import {
   Upload, FileText, Trash2, Play, CheckCircle2, XCircle, Loader2,
-  Plus, AlertCircle, Download, Eye,
+  Plus, AlertCircle, Download, Eye, Copy,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -15,6 +15,7 @@ import { cn } from "@/lib/utils";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
+import { Checkbox } from "@/components/ui/checkbox";
 
 const CATEGORIES = [
   "motivation", "success", "love", "wisdom",
@@ -32,7 +33,12 @@ interface Entry {
   author: string;
   category: string;
   status: "pending" | "importing" | "done" | "error";
+  duplicateOf?: "existing" | string;
   error?: string;
+}
+
+function normalizeQuote(q: string) {
+  return q.toLowerCase().replace(/[\u201C\u201D"'\s]+/g, " ").trim();
 }
 
 function parseInput(raw: string): Entry[] {
@@ -112,6 +118,7 @@ export default function BulkImport() {
   const queryClient = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const createReel = useCreateReel();
+  const { data: existingReels } = useListReels();
 
   const [rawInput, setRawInput] = useState("");
   const [entries, setEntries] = useState<Entry[]>([]);
@@ -120,7 +127,22 @@ export default function BulkImport() {
   const [importProgress, setImportProgress] = useState(0);
   const [defaultCategory, setDefaultCategory] = useState(DEFAULT_CATEGORY);
   const [defaultStatus, setDefaultStatus] = useState<ReelStatus>(DEFAULT_STATUS);
+  const [skipDuplicates, setSkipDuplicates] = useState(true);
   const [previewEntry, setPreviewEntry] = useState<Entry | null>(null);
+
+  const detectDuplicates = useCallback((parsed: Entry[]): Entry[] => {
+    const existingKeys = new Set((existingReels ?? []).map((r) => normalizeQuote(r.quote)));
+    const seen = new Map<string, string>();
+
+    return parsed.map((e) => {
+      const key = normalizeQuote(e.quote);
+      if (!key) return e;
+      if (existingKeys.has(key)) return { ...e, duplicateOf: "existing" };
+      if (seen.has(key)) return { ...e, duplicateOf: seen.get(key) };
+      seen.set(key, e.id);
+      return e;
+    });
+  }, [existingReels]);
 
   const handleParse = useCallback(() => {
     const parsed = parseInput(rawInput);
@@ -133,9 +155,9 @@ export default function BulkImport() {
       ...e,
       category: e.category === DEFAULT_CATEGORY ? defaultCategory : e.category,
     }));
-    setEntries(withDefaults);
+    setEntries(detectDuplicates(withDefaults));
     setIsParsed(true);
-  }, [rawInput, defaultCategory, toast]);
+  }, [rawInput, defaultCategory, toast, detectDuplicates]);
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -170,7 +192,7 @@ export default function BulkImport() {
   };
 
   const handleImportAll = async () => {
-    const pending = entries.filter((e) => e.status === "pending" && e.quote.trim());
+    const pending = entries.filter((e) => e.status === "pending" && e.quote.trim() && !(skipDuplicates && e.duplicateOf));
     if (pending.length === 0) {
       toast({ title: "No entries to import" });
       return;
@@ -180,6 +202,8 @@ export default function BulkImport() {
     setImportProgress(0);
 
     let done = 0;
+    let successCount = 0;
+    let failCount = 0;
     for (const entry of pending) {
       setEntries((prev) => prev.map((e) => e.id === entry.id ? { ...e, status: "importing" } : e));
       try {
@@ -197,6 +221,7 @@ export default function BulkImport() {
             {
               onSuccess: () => {
                 setEntries((prev) => prev.map((e) => e.id === entry.id ? { ...e, status: "done" } : e));
+                successCount++;
                 resolve();
               },
               onError: (err) => {
@@ -204,6 +229,7 @@ export default function BulkImport() {
                   ...e, status: "error",
                   error: err instanceof Error ? err.message : "Failed",
                 } : e));
+                failCount++;
                 reject(err);
               },
             }
@@ -220,13 +246,6 @@ export default function BulkImport() {
     queryClient.invalidateQueries({ queryKey: getGetRecentReelsQueryKey() });
     queryClient.invalidateQueries({ queryKey: getGetStatsQueryKey() });
 
-    // Count final statuses accurately (state updates are async, track locally)
-    const finalEntries = entries.map((e) => {
-      if (e.status === "importing") return { ...e, status: "error" as const };
-      return e;
-    });
-    const successCount = finalEntries.filter((e) => e.status === "done").length;
-    const failCount = finalEntries.filter((e) => e.status === "error").length;
     const msg = failCount > 0
       ? `${successCount} succeeded, ${failCount} failed — check red rows.`
       : `Check your Library to view them.`;
@@ -248,6 +267,8 @@ export default function BulkImport() {
   const doneCount  = entries.filter((e) => e.status === "done").length;
   const errorCount = entries.filter((e) => e.status === "error").length;
   const pendingCount = entries.filter((e) => e.status === "pending").length;
+  const duplicateCount = entries.filter((e) => e.duplicateOf).length;
+  const importableCount = entries.filter((e) => e.status === "pending" && e.quote.trim() && !(skipDuplicates && e.duplicateOf)).length;
 
   return (
     <div className="p-8 max-w-5xl mx-auto space-y-8 animate-in fade-in duration-500">
@@ -376,6 +397,12 @@ export default function BulkImport() {
                   {pendingCount} pending
                 </Badge>
               )}
+              {duplicateCount > 0 && !isImporting && (
+                <Badge variant="outline" className="gap-1.5 border-amber-500/30 text-amber-500 bg-amber-500/10">
+                  <Copy className="h-3 w-3" />
+                  {duplicateCount} duplicate{duplicateCount !== 1 ? "s" : ""}
+                </Badge>
+              )}
             </div>
             <div className="flex gap-2">
               <Button variant="outline" size="sm" onClick={() => { setIsParsed(false); setEntries([]); }}
@@ -451,6 +478,13 @@ export default function BulkImport() {
                     </SelectContent>
                   </Select>
                   <div className="flex items-center gap-1.5 justify-end">
+                    {entry.duplicateOf && (
+                      <span title={entry.duplicateOf === "existing" ? "Already exists in your library" : "Duplicate in this import"}>
+                        <Badge variant="outline" className="text-[10px] h-5 px-1.5 border-amber-500/30 text-amber-500 bg-amber-500/10">
+                          Duplicate
+                        </Badge>
+                      </span>
+                    )}
                     {entry.status === "pending" && (
                       <button onClick={() => removeEntry(entry.id)}
                         className="p-1 rounded text-muted-foreground hover:text-destructive transition-colors">
@@ -474,16 +508,30 @@ export default function BulkImport() {
             </div>
           </div>
 
+          {/* Skip duplicates toggle */}
+          {duplicateCount > 0 && !isImporting && (
+            <div className="flex items-center gap-2">
+              <Checkbox
+                id="skip-duplicates"
+                checked={skipDuplicates}
+                onCheckedChange={(checked) => setSkipDuplicates(checked === true)}
+              />
+              <label htmlFor="skip-duplicates" className="text-sm text-muted-foreground cursor-pointer select-none">
+                Skip {duplicateCount} duplicate{duplicateCount !== 1 ? "s" : ""} when importing
+              </label>
+            </div>
+          )}
+
           {/* Import button */}
           <Button
             onClick={handleImportAll}
-            disabled={isImporting || pendingCount === 0}
+            disabled={isImporting || importableCount === 0}
             className="w-full gap-2 font-semibold h-12 text-base shadow-primary/20 shadow-lg"
           >
             {isImporting ? (
-              <><Loader2 className="h-5 w-5 animate-spin" /> Importing {pendingCount} reels…</>
+              <><Loader2 className="h-5 w-5 animate-spin" /> Importing {importableCount} reels…</>
             ) : (
-              <><Play className="h-5 w-5" /> Import {pendingCount} Reel{pendingCount !== 1 ? "s" : ""}</>
+              <><Play className="h-5 w-5" /> Import {importableCount} Reel{importableCount !== 1 ? "s" : ""}</>
             )}
           </Button>
 

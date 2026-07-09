@@ -1,0 +1,23 @@
+kind = "mobile"
+previewPath = "/reel-studio-mobile/"
+title = "Reel Studio Mobile"
+version = "1.0.0"
+id = "artifacts/reel-studio-mobile"
+router = "expo-domain"
+
+[[services]]
+name = "expo"
+ensurePreviewReachable = "/status"
+paths = [ "/reel-studio-mobile/" ]
+localPort = 21620
+
+[services.development]
+run = "pnpm --filter @workspace/reel-studio-mobile run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/reel-studio-mobile", "run", "build" ]
+run = [ "pnpm", "--filter", "@workspace/reel-studio-mobile", "run", "serve" ]
+
+[services.env]
+PORT = "21620"
+BASE_PATH = "/reel-studio-mobile/"

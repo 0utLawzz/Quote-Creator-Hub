@@ -1,1 +1,3 @@
 - [Reel Studio architecture](reel-studio-arch.md) — key decisions for video-renderer, CreateReel controls, and text effects canvas rendering
+- [Multi-artifact query invalidation](multi-artifact-query-invalidation.md) — mobile app must use generated query keys from `@workspace/api-client-react`, not bare `['listReels']` strings, so invalidations match the generated React Query client
+- [Bulk import counters](bulk-import-counters.md) — counting success/failure after async state updates must use local counters, not the stale state snapshot from the closure
