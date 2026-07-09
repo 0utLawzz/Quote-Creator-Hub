@@ -1,9 +1,9 @@
 import * as React from "react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Calendar, Cloud, Database, HardDrive, Rocket, TrendingUp,
   Clock, Target, Globe, Server, CheckCircle, ChevronDown, ChevronUp,
-  Zap, Shield, DollarSign, BarChart3, RefreshCw,
+  Zap, Shield, DollarSign, BarChart3, RefreshCw, BookOpen, Trash2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 

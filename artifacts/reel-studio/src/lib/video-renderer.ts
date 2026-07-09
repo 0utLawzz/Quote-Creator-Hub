@@ -31,6 +31,10 @@ export interface VideoConfig {
   fontSizeScale?: FontSizeScale;
   textPosition?: TextPosition;
   textAlign?: "left" | "center" | "right";
+  // Per-scene animation
+  sceneEffects?: { category?: TextEffect; quote?: TextEffect; author?: TextEffect };
+  animationSpeed?: "slow" | "normal" | "fast";
+  authorChoreographed?: boolean;
 }
 
 export const TRANSITION_EFFECTS: { id: TransitionEffect; label: string; desc: string }[] = [
@@ -63,6 +67,12 @@ export const TEXT_POSITION_OPTIONS: { id: TextPosition; label: string }[] = [
   { id: "top",    label: "Top" },
   { id: "center", label: "Center" },
   { id: "bottom", label: "Bottom" },
+];
+
+export const ANIMATION_SPEED_OPTIONS: { id: "slow" | "normal" | "fast"; label: string }[] = [
+  { id: "slow",   label: "Slow"   },
+  { id: "normal", label: "Normal" },
+  { id: "fast",   label: "Fast"   },
 ];
 
 export const DURATION_PRESETS = [
@@ -200,6 +210,19 @@ function applyTransition(
   }
 }
 
+// ── Per-scene animation helpers ────────────────────────────────────────────
+function getSceneEffect(cfg: VideoConfig, scene: "category" | "quote" | "author"): TextEffect {
+  return cfg.sceneEffects?.[scene] ?? cfg.textEffect ?? "none";
+}
+function getSpeedMultiplier(cfg: VideoConfig): number {
+  return { slow: 0.4, normal: 1.0, fast: 2.5 }[cfg.animationSpeed ?? "normal"];
+}
+function getSceneProgress(ms: number, timing: SceneTiming, speedMul: number): number {
+  if (ms <= timing.peakStart) return 0;
+  if (ms >= timing.peakEnd) return 1;
+  return Math.min(1, ((ms - timing.peakStart) / (timing.peakEnd - timing.peakStart)) * speedMul);
+}
+
 // ── Background ─────────────────────────────────────────────────────────────
 function drawBackground(
   ctx: CanvasRenderingContext2D,
@@ -238,12 +261,15 @@ function drawAccentBars(ctx: CanvasRenderingContext2D, cfg: VideoConfig, W: numb
 }
 
 // ── Scene drawers ──────────────────────────────────────────────────────────
-function drawCategoryScene(ctx: CanvasRenderingContext2D, cfg: VideoConfig, W: number, H: number) {
+function drawCategoryScene(ctx: CanvasRenderingContext2D, cfg: VideoConfig, W: number, H: number, ms: number, timing: SceneTiming) {
   const cx = W / 2;
   const cy = H / 2;
   const scale = W / 1080;
   const fsm = { sm: 0.72, md: 1.0, lg: 1.28, xl: 1.6 }[cfg.fontSizeScale ?? "md"];
   const [ar, ag, ab] = hexToRgb(cfg.template.accentColor);
+  const effect = getSceneEffect(cfg, "category");
+  const speedMul = getSpeedMultiplier(cfg);
+  const progress = getSceneProgress(ms, timing, speedMul);
 
   ctx.strokeStyle = cfg.template.accentColor;
   ctx.lineWidth = 4;
@@ -255,17 +281,36 @@ function drawCategoryScene(ctx: CanvasRenderingContext2D, cfg: VideoConfig, W: n
   ctx.beginPath(); ctx.moveTo(120 * scale, cy - 185 * scale); ctx.lineTo(W - 120 * scale, cy - 185 * scale); ctx.stroke();
   ctx.beginPath(); ctx.moveTo(120 * scale, cy + 185 * scale); ctx.lineTo(W - 120 * scale, cy + 185 * scale); ctx.stroke();
 
-  ctx.font = `600 ${36 * scale}px "Outfit", sans-serif`;
-  ctx.fillStyle = `rgba(${ar},${ag},${ab},0.7)`;
-  ctx.textAlign = "center";
-  ctx.fillText("CATEGORY", cx, cy - 260 * scale);
-
   const catText = cfg.category.toUpperCase();
   const fontSize = Math.min(200 * fsm, Math.floor(1600 / (catText.length * 0.6)) * fsm) * scale;
   ctx.font = `900 ${fontSize}px ${cfg.fontFamily}`;
   ctx.fillStyle = cfg.template.textColor;
   ctx.textBaseline = "middle";
-  ctx.fillText(catText, cx, cy);
+  ctx.textAlign = "center";
+
+  switch (effect) {
+    case "typewriter": {
+      const visible = Math.max(1, Math.floor(catText.length * Math.min(1, progress * 1.5)));
+      ctx.fillText(catText.slice(0, visible), cx, cy);
+      break;
+    }
+    case "wave":
+      ctx.fillText(catText, cx, cy + Math.sin(ms * 0.002) * fontSize * 0.04);
+      break;
+    case "bounce": {
+      const slideIn = (1 - Math.min(1, progress * 2.5)) * 50 * scale;
+      ctx.save(); ctx.translate(0, slideIn); ctx.fillText(catText, cx, cy); ctx.restore();
+      break;
+    }
+    case "glow":
+      ctx.shadowColor = cfg.template.accentColor;
+      ctx.shadowBlur = (20 + 10 * Math.sin(ms * 0.002)) * scale;
+      ctx.fillText(catText, cx, cy);
+      ctx.shadowBlur = 0;
+      break;
+    default:
+      ctx.fillText(catText, cx, cy);
+  }
   ctx.textBaseline = "alphabetic";
 
   ctx.fillStyle = cfg.template.accentColor;
@@ -289,7 +334,7 @@ function drawQuoteScene(
   const scale = W / 1080;
   const fsm = { sm: 0.72, md: 1.0, lg: 1.28, xl: 1.6 }[cfg.fontSizeScale ?? "md"];
   const align = cfg.textAlign ?? "center";
-  const textEffect = cfg.textEffect ?? "none";
+  const textEffect = cfg.sceneEffects?.quote ?? cfg.textEffect ?? "none";
   const textPosition = cfg.textPosition ?? "center";
   const [ar, ag, ab] = hexToRgb(cfg.template.accentColor);
 
@@ -497,10 +542,6 @@ function drawBrandingScene(
   ctx.fillText(brand, cx, cy + 30 * scale);
   ctx.textBaseline = "alphabetic";
 
-  ctx.font = `300 ${38 * scale}px "Outfit", sans-serif`;
-  ctx.fillStyle = `rgba(${ar},${ag},${ab},0.8)`;
-  ctx.fillText("CINEMATIC QUOTE REELS", cx, cy + 120 * scale);
-
   ctx.strokeStyle = cfg.template.accentColor;
   ctx.lineWidth = 3 * scale;
   const ruleY = cy + 185 * scale;
@@ -536,9 +577,9 @@ function drawFrame(
     drawAccentBars(ctx, cfg, W, H);
 
     switch (timing.scene) {
-      case "category": drawCategoryScene(ctx, cfg, W, H); break;
+      case "category": drawCategoryScene(ctx, cfg, W, H, ms, timing); break;
       case "quote":    drawQuoteScene(ctx, cfg, W, H, ms, timing); break;
-      case "author":   drawAuthorScene(ctx, cfg, W, H); break;
+      case "author":   drawAuthorScene(ctx, cfg, W, H, ms, timing); break;
       case "branding": drawBrandingScene(ctx, cfg, logoImg, W, H); break;
     }
 

@@ -37,6 +37,20 @@ const CATEGORIES = [
   "friendship", "courage", "life", "mindfulness",
 ];
 const PLATFORMS = ["Instagram", "TikTok", "YouTube Shorts", "Pinterest", "LinkedIn", "Facebook"];
+
+const BASE = import.meta.env.BASE_URL ?? "/";
+const BUILTIN_TRACKS = [
+  { id: "morning-pages",   name: "Morning Pages",   url: `${BASE}music/morning-pages.mp3` },
+  { id: "morning-pages-2", name: "Morning Pages 2",  url: `${BASE}music/morning-pages-2.mp3` },
+  { id: "summit-pulse",    name: "Summit Pulse",     url: `${BASE}music/summit-pulse.mp3` },
+  { id: "bright-path",     name: "Bright Path",      url: `${BASE}music/bright-path.mp3` },
+  { id: "rising-dawn",     name: "Rising Dawn",      url: `${BASE}music/rising-dawn.mp3` },
+  { id: "rising-dawn-2",   name: "Rising Dawn 2",    url: `${BASE}music/rising-dawn-2.mp3` },
+];
+const PRESET_LOGOS = [
+  { id: "outlawz-red",   name: "Outlawz",       url: `${BASE}logos/outlawz-red.png` },
+  { id: "outlawz-rings", name: "Outlawz Rings",  url: `${BASE}logos/outlawz-rings.png` },
+];
 const SCENES = [
   { id: "category", label: "Category" },
   { id: "quote",    label: "Quote" },
@@ -92,7 +106,9 @@ export default function CreateReel() {
   const [audioVolume, setAudioVolume] = useState(70); // 0–100
 
   // ── Typography & text effects ──────────────────────────────────────────
-  const [textEffect, setTextEffect] = useState<TextEffect>("none");
+  const [sceneEffects, setSceneEffects] = useState<{ category: TextEffect; quote: TextEffect; author: TextEffect }>({ category: "none", quote: "none", author: "none" });
+  const [animationSpeed, setAnimationSpeed] = useState<"slow" | "normal" | "fast">("normal");
+  const [authorChoreographed, setAuthorChoreographed] = useState(false);
   const [fontSizeScale, setFontSizeScale] = useState<FontSizeScale>("md");
   const [textPosition, setTextPosition] = useState<TextPosition>("center");
   const [textAlignMode, setTextAlignMode] = useState<"left" | "center" | "right">("center");
@@ -198,6 +214,12 @@ export default function CreateReel() {
           setAuthor(data.author);
           if (data.suggestedHashtags) setHashtags(data.suggestedHashtags);
           toast({ title: "Quote generated" });
+          // Log generated quote for deduplication tracking
+          try {
+            const log = JSON.parse(localStorage.getItem("reel-studio-quote-log") || "[]");
+            log.unshift({ quote: data.quote, author: data.author || "", category, generatedAt: new Date().toISOString() });
+            localStorage.setItem("reel-studio-quote-log", JSON.stringify(log.slice(0, 100)));
+          } catch { /* ignore storage errors */ }
         },
         onError: () => toast({ title: "Generation failed", variant: "destructive" }),
       }
@@ -284,7 +306,9 @@ export default function CreateReel() {
         transition,
         duration,
         quality,
-        textEffect,
+        sceneEffects,
+        animationSpeed,
+        authorChoreographed,
         fontSizeScale,
         textPosition,
         textAlign: textAlignMode,
@@ -305,7 +329,7 @@ export default function CreateReel() {
       setIsRecording(false);
       setVideoProgress(0);
     }
-  }, [quote, author, category, activeTemplate, activeFont, brandName, logoUrl, customBg, audioUrl, audioVolume, transition, duration, quality, textEffect, fontSizeScale, textPosition, textAlignMode, toast]);
+  }, [quote, author, category, activeTemplate, activeFont, brandName, logoUrl, customBg, audioUrl, audioVolume, transition, duration, quality, sceneEffects, animationSpeed, authorChoreographed, fontSizeScale, textPosition, textAlignMode, toast]);
 
   const togglePlatform = (platform: string) =>
     setSelectedPlatforms((prev) =>
@@ -327,8 +351,6 @@ export default function CreateReel() {
         return (
           <div className="flex flex-col items-center justify-center h-full gap-4 px-6">
             <div className="w-full h-px" style={{ backgroundColor: accent }} />
-            <p className="text-[10px] font-sans font-semibold tracking-[0.25em] uppercase"
-              style={{ color: accent, opacity: 0.7 }}>Category</p>
             <p className="font-black text-center leading-none"
               style={{
                 fontFamily: ff, color: text,
@@ -373,10 +395,6 @@ export default function CreateReel() {
             <p className="font-bold text-center text-sm leading-tight" style={{ fontFamily: ff, color: text }}>
               {author || <span style={{ opacity: 0.3 }}>Author Name</span>}
             </p>
-            <div className="px-3 py-1 rounded-full text-[8px] font-semibold tracking-wider uppercase"
-              style={{ color: accent, border: `1px solid ${accent}40`, backgroundColor: `${accent}15` }}>
-              {category}
-            </div>
             <div className="w-px h-12" style={{ backgroundColor: accent, opacity: 0.5 }} />
           </div>
         );
@@ -395,9 +413,6 @@ export default function CreateReel() {
             <p className="font-black text-center tracking-widest text-sm"
               style={{ fontFamily: "var(--app-font-sans)", color: text }}>
               {(brandName || "REEL STUDIO").toUpperCase()}
-            </p>
-            <p className="text-[8px] tracking-[0.2em] uppercase" style={{ color: accent, opacity: 0.8 }}>
-              Cinematic Quote Reels
             </p>
             <div className="w-16 h-px" style={{ backgroundColor: accent }} />
           </div>
@@ -418,7 +433,7 @@ export default function CreateReel() {
             <div>
               <h1 className="text-xl font-bold tracking-tight">{editId ? "Edit Reel" : "Create Reel"}</h1>
               <p className="text-xs text-muted-foreground mt-0.5">
-                {mode === "video" ? `${durationLabel} animated · ${quality}` : "Cinematic quote image"}
+                {mode === "video" ? `${durationLabel} animated · ${quality}` : "Quote image export"}
               </p>
             </div>
             <div className="flex items-center gap-2">
@@ -593,33 +608,89 @@ export default function CreateReel() {
 
           <Separator className="opacity-40" />
 
-          {/* Text Animation (SFX) */}
-          <div className="space-y-3">
-            <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
-              <Wand2 className="h-3 w-3" /> Text Animation
-            </Label>
-            <div className="grid grid-cols-1 gap-1.5">
-              {TEXT_EFFECTS.map((fx) => (
-                <button key={fx.id} onClick={() => setTextEffect(fx.id)}
-                  className={cn(
-                    "flex items-center gap-3 px-3 py-2 rounded-md border text-left transition-all duration-200",
-                    textEffect === fx.id
-                      ? "border-primary bg-primary/10 text-primary"
-                      : "border-border/50 bg-card/40 text-muted-foreground hover:border-border hover:text-foreground"
+          {/* Per-Scene Animation (video only) */}
+          {mode === "video" && (
+            <div className="space-y-4">
+              <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                <Wand2 className="h-3 w-3" /> Per-Scene Animation
+              </Label>
+
+              {/* Category */}
+              <div className="space-y-1.5">
+                <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Scene 1 · Category</p>
+                <div className="flex flex-wrap gap-1">
+                  {TEXT_EFFECTS.map((fx) => (
+                    <button key={fx.id} onClick={() => setSceneEffects(p => ({ ...p, category: fx.id }))}
+                      className={cn("px-2 py-1 rounded text-[10px] font-semibold border transition-all",
+                        sceneEffects.category === fx.id ? "border-primary bg-primary/10 text-primary" : "border-border/50 text-muted-foreground hover:border-border"
+                      )}>
+                      {fx.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Quote */}
+              <div className="space-y-1.5">
+                <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Scene 2 · Quote</p>
+                <div className="flex flex-wrap gap-1">
+                  {TEXT_EFFECTS.map((fx) => (
+                    <button key={fx.id} onClick={() => setSceneEffects(p => ({ ...p, quote: fx.id }))}
+                      className={cn("px-2 py-1 rounded text-[10px] font-semibold border transition-all",
+                        sceneEffects.quote === fx.id ? "border-primary bg-primary/10 text-primary" : "border-border/50 text-muted-foreground hover:border-border"
+                      )}>
+                      {fx.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Author */}
+              <div className="space-y-1.5">
+                <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Scene 3 · Author</p>
+                <div className="flex flex-wrap gap-1">
+                  {TEXT_EFFECTS.map((fx) => (
+                    <button key={fx.id} onClick={() => setSceneEffects(p => ({ ...p, author: fx.id }))}
+                      className={cn("px-2 py-1 rounded text-[10px] font-semibold border transition-all",
+                        sceneEffects.author === fx.id ? "border-primary bg-primary/10 text-primary" : "border-border/50 text-muted-foreground hover:border-border"
+                      )}>
+                      {fx.label}
+                    </button>
+                  ))}
+                </div>
+                {/* Choreography toggle */}
+                <button onClick={() => setAuthorChoreographed(p => !p)}
+                  className={cn("flex items-center gap-2 px-3 py-2 rounded-md border w-full text-left transition-all mt-1",
+                    authorChoreographed ? "border-primary bg-primary/10 text-primary" : "border-border/50 text-muted-foreground hover:border-border"
                   )}>
-                  <div className={cn(
-                    "w-2 h-2 rounded-full flex-shrink-0",
-                    textEffect === fx.id ? "bg-primary" : "bg-muted-foreground/40"
-                  )} />
-                  <div className="flex-1">
-                    <span className="text-xs font-semibold">{fx.label}</span>
-                    <span className="text-[10px] text-muted-foreground ml-2">{fx.desc}</span>
+                  <div className={cn("w-8 h-4 rounded-full flex-shrink-0 relative transition-colors",
+                    authorChoreographed ? "bg-primary" : "bg-muted-foreground/30")}>
+                    <div className={cn("absolute top-0.5 w-3 h-3 bg-white rounded-full transition-all",
+                      authorChoreographed ? "left-[18px]" : "left-0.5")} />
                   </div>
-                  {textEffect === fx.id && <Check className="h-3 w-3 text-primary flex-shrink-0" />}
+                  <div>
+                    <span className="text-xs font-semibold">Choreographed</span>
+                    <span className="text-[10px] text-muted-foreground ml-1.5">"Words By" → then author name</span>
+                  </div>
                 </button>
-              ))}
+              </div>
+
+              {/* Speed */}
+              <div className="space-y-1.5">
+                <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Animation Speed</p>
+                <div className="flex gap-1">
+                  {(["slow", "normal", "fast"] as const).map((s) => (
+                    <button key={s} onClick={() => setAnimationSpeed(s)}
+                      className={cn("flex-1 py-1.5 rounded border text-xs font-semibold transition-all capitalize",
+                        animationSpeed === s ? "border-primary bg-primary/10 text-primary" : "border-border/50 text-muted-foreground hover:border-border"
+                      )}>
+                      {s}
+                    </button>
+                  ))}
+                </div>
+              </div>
             </div>
-          </div>
+          )}
 
           <Separator className="opacity-40" />
 
@@ -783,16 +854,28 @@ export default function CreateReel() {
                 </Button>
               </div>
             ) : (
-              <button onClick={() => logoInputRef.current?.click()}
-                className="w-full rounded-lg border-2 border-dashed border-border/50 bg-card/30 p-3 flex items-center gap-3 hover:border-border hover:bg-card/50 transition-all duration-200">
-                <div className="w-8 h-8 rounded-lg border border-border/50 bg-muted flex items-center justify-center flex-shrink-0">
-                  <Image className="h-3.5 w-3.5 text-muted-foreground" />
+              <div className="space-y-2">
+                <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Preset Logos</p>
+                <div className="flex gap-2">
+                  {PRESET_LOGOS.map((preset) => (
+                    <button key={preset.id}
+                      onClick={() => { setLogoUrl(preset.url); setLogoName(preset.name); }}
+                      className="rounded-lg border border-border/50 bg-card/40 p-1.5 flex items-center justify-center hover:border-primary transition-all">
+                      <img src={preset.url} className="h-10 w-10 object-contain rounded" alt={preset.name} />
+                    </button>
+                  ))}
                 </div>
-                <div className="text-left">
-                  <p className="text-xs font-medium text-muted-foreground">Upload logo image</p>
-                  <p className="text-[10px] text-muted-foreground/60">PNG, SVG, JPG · Square recommended</p>
-                </div>
-              </button>
+                <button onClick={() => logoInputRef.current?.click()}
+                  className="w-full rounded-lg border-2 border-dashed border-border/50 bg-card/30 p-3 flex items-center gap-3 hover:border-border hover:bg-card/50 transition-all duration-200">
+                  <div className="w-8 h-8 rounded-lg border border-border/50 bg-muted flex items-center justify-center flex-shrink-0">
+                    <Image className="h-3.5 w-3.5 text-muted-foreground" />
+                  </div>
+                  <div className="text-left">
+                    <p className="text-xs font-medium text-muted-foreground">Upload logo image</p>
+                    <p className="text-[10px] text-muted-foreground/60">PNG, SVG, JPG · Square recommended</p>
+                  </div>
+                </button>
+              </div>
             )}
             <input ref={logoInputRef} type="file" accept="image/*" className="hidden" onChange={handleLogoUpload} />
           </div>
@@ -898,14 +981,27 @@ export default function CreateReel() {
                     </div>
                   </div>
                 ) : (
-                  <button onClick={() => audioInputRef.current?.click()}
-                    className="w-full rounded-lg border-2 border-dashed border-border/50 bg-card/30 p-4 flex items-center gap-3 hover:border-border hover:bg-card/50 transition-all duration-200">
-                    <Music className="h-4 w-4 text-muted-foreground flex-shrink-0" />
-                    <div className="text-left">
-                      <p className="text-xs font-medium text-muted-foreground">Upload background music</p>
-                      <p className="text-[10px] text-muted-foreground/60">MP3, WAV, OGG • Loops automatically</p>
+                  <div className="space-y-2">
+                    <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Built-in Tracks</p>
+                    <div className="grid grid-cols-2 gap-1.5">
+                      {BUILTIN_TRACKS.map((track) => (
+                        <button key={track.id}
+                          onClick={() => { setAudioUrl(track.url); setAudioName(track.name); }}
+                          className="flex flex-col items-start px-2.5 py-2 rounded-md border border-border/50 bg-card/40 text-muted-foreground hover:border-primary hover:text-primary transition-all text-left">
+                          <Music className="h-3 w-3 mb-1 opacity-60" />
+                          <p className="text-[10px] font-semibold leading-tight">{track.name}</p>
+                        </button>
+                      ))}
                     </div>
-                  </button>
+                    <button onClick={() => audioInputRef.current?.click()}
+                      className="w-full rounded-lg border-2 border-dashed border-border/50 bg-card/30 p-3 flex items-center gap-3 hover:border-border hover:bg-card/50 transition-all">
+                      <Upload className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                      <div className="text-left">
+                        <p className="text-xs font-medium text-muted-foreground">Upload your own</p>
+                        <p className="text-[10px] text-muted-foreground/60">MP3, WAV, OGG</p>
+                      </div>
+                    </button>
+                  </div>
                 )}
                 <input ref={audioInputRef} type="file" accept="audio/*" className="hidden" onChange={handleAudioUpload} />
               </div>
@@ -1073,16 +1169,6 @@ export default function CreateReel() {
                 {logoUrl && (
                   <div className="absolute top-2 left-0 right-0 flex justify-center">
                     <img src={logoUrl} className="h-8 w-8 object-contain rounded" alt="logo" />
-                  </div>
-                )}
-                {category && (
-                  <div className="px-3 py-1 rounded-full text-[10px] font-sans font-semibold uppercase tracking-[0.15em]"
-                    style={{
-                      color: activeTemplate.accentColor,
-                      border: `1px solid ${activeTemplate.accentColor}40`,
-                      backgroundColor: `${activeTemplate.accentColor}15`,
-                    }}>
-                    {category}
                   </div>
                 )}
                 <p className="leading-relaxed"

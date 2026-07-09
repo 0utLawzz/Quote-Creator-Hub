@@ -3,7 +3,10 @@ import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { format } from "date-fns";
-import { Calendar as CalendarIcon, Trash2, Link as LinkIcon, Instagram, Facebook, Twitter, Linkedin, Video } from "lucide-react";
+import {
+  Calendar as CalendarIcon, Trash2, Instagram, Facebook,
+  Twitter, Linkedin, Video, Zap, Clock,
+} from "lucide-react";
 import { useListSchedules, useCreateSchedule, useDeleteSchedule, useListReels } from "@workspace/api-client-react";
 import { getListSchedulesQueryKey } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -17,14 +20,16 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
 
 const PLATFORMS = [
   { id: "instagram", name: "Instagram", icon: Instagram, color: "text-pink-500" },
-  { id: "tiktok", name: "TikTok", icon: Video, color: "text-black dark:text-white" },
-  { id: "twitter", name: "Twitter/X", icon: Twitter, color: "text-sky-500" },
-  { id: "facebook", name: "Facebook", icon: Facebook, color: "text-blue-600" },
-  { id: "linkedin", name: "LinkedIn", icon: Linkedin, color: "text-blue-700" },
+  { id: "tiktok",    name: "TikTok",    icon: Video,      color: "text-foreground" },
+  { id: "twitter",   name: "Twitter/X", icon: Twitter,    color: "text-sky-500" },
+  { id: "facebook",  name: "Facebook",  icon: Facebook,   color: "text-blue-600" },
+  { id: "linkedin",  name: "LinkedIn",  icon: Linkedin,   color: "text-blue-700" },
 ];
 
 export default function Schedule() {
@@ -32,21 +37,20 @@ export default function Schedule() {
   const queryClient = useQueryClient();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(new Date());
+  const [selectedTime, setSelectedTime] = useState("12:00");
 
   const { data: schedules, isLoading: loadingSchedules } = useListSchedules();
-  const { data: reels, isLoading: loadingReels } = useListReels({ status: "draft" }); // mainly schedule drafts
+  const { data: reels } = useListReels({});
 
   const createSchedule = useCreateSchedule({
     mutation: {
       onSuccess: () => {
-        toast({ title: "Reel scheduled successfully!" });
+        toast({ title: "Reel scheduled!" });
         queryClient.invalidateQueries({ queryKey: getListSchedulesQueryKey() });
         setIsDialogOpen(false);
       },
-      onError: () => {
-        toast({ variant: "destructive", title: "Failed to schedule reel" });
-      }
-    }
+      onError: () => toast({ variant: "destructive", title: "Failed to schedule reel" }),
+    },
   });
 
   const deleteSchedule = useDeleteSchedule({
@@ -54,37 +58,53 @@ export default function Schedule() {
       onSuccess: () => {
         toast({ title: "Schedule cancelled" });
         queryClient.invalidateQueries({ queryKey: getListSchedulesQueryKey() });
-      }
-    }
+      },
+    },
   });
 
   const form = useForm({
     resolver: zodResolver(scheduleReelSchema),
-    defaultValues: {
-      reelId: undefined,
-      platform: "",
-      scheduledAt: new Date().toISOString(),
-    }
+    defaultValues: { reelId: undefined, platform: "", scheduledAt: new Date().toISOString() },
   });
+
+  function buildScheduledAt(date?: Date, time?: string): string {
+    const d = date ? new Date(date) : new Date();
+    const [h, m] = (time || "12:00").split(":").map(Number);
+    d.setHours(h, m, 0, 0);
+    return d.toISOString();
+  }
 
   function onSubmit(data: any) {
     createSchedule.mutate({ data });
   }
 
-  // Sort schedules chronologically
-  const sortedSchedules = schedules?.slice().sort((a, b) => 
-    new Date(a.scheduledAt).getTime() - new Date(b.scheduledAt).getTime()
-  ) || [];
+  function handlePublishNow() {
+    const reelId = form.getValues("reelId");
+    const platform = form.getValues("platform");
+    if (!reelId || !platform) {
+      toast({ variant: "destructive", title: "Select a reel and platform first" });
+      return;
+    }
+    createSchedule.mutate({
+      data: { reelId, platform, scheduledAt: new Date().toISOString() },
+    });
+  }
+
+  const sortedSchedules = schedules?.slice().sort(
+    (a, b) => new Date(a.scheduledAt).getTime() - new Date(b.scheduledAt).getTime()
+  ) ?? [];
 
   return (
     <div className="p-8 max-w-6xl mx-auto space-y-8 animate-in fade-in duration-500">
+      {/* Header */}
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Content Schedule</h1>
           <p className="text-muted-foreground mt-1 text-sm">
-            Plan and automate your cinematic quotes across platforms.
+            Plan and automate your quote reels across platforms.
           </p>
         </div>
+
         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
           <DialogTrigger asChild>
             <Button className="font-semibold shadow-primary/25 shadow-lg">
@@ -92,123 +112,129 @@ export default function Schedule() {
               Schedule Post
             </Button>
           </DialogTrigger>
-          <DialogContent className="sm:max-w-[425px]">
+          <DialogContent className="sm:max-w-[460px]">
             <DialogHeader>
               <DialogTitle>Schedule Reel</DialogTitle>
               <DialogDescription>
-                Select a reel and choose when and where it should be posted.
+                Choose a reel, platform, date and time — or post right now.
               </DialogDescription>
             </DialogHeader>
-            <Form {...form}>
-              <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 pt-4">
-                <FormField
-                  control={form.control}
-                  name="reelId"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Select Reel</FormLabel>
-                      <Select 
-                        onValueChange={(val) => field.onChange(parseInt(val))} 
-                        value={String(field.value ?? "")}
-                      >
-                        <FormControl>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Choose a reel..." />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          {reels?.map(r => (
-                            <SelectItem key={r.id} value={r.id.toString()}>
-                              {r.quote.substring(0, 40)}...
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                
-                <FormField
-                  control={form.control}
-                  name="platform"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Platform</FormLabel>
-                      <Select onValueChange={field.onChange} value={field.value}>
-                        <FormControl>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select platform..." />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          {PLATFORMS.map(p => (
-                            <SelectItem key={p.id} value={p.id}>
-                              <div className="flex items-center gap-2">
-                                <p.icon className={cn("h-4 w-4", p.color)} />
-                                {p.name}
-                              </div>
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
 
-                <FormField
-                  control={form.control}
-                  name="scheduledAt"
-                  render={({ field }) => (
-                    <FormItem className="flex flex-col">
-                      <FormLabel>Schedule Date</FormLabel>
-                      <Popover>
-                        <PopoverTrigger asChild>
-                          <FormControl>
-                            <Button
-                              variant={"outline"}
-                              className={cn(
-                                "w-full pl-3 text-left font-normal bg-card/50",
-                                !selectedDate && "text-muted-foreground"
-                              )}
-                            >
-                              {selectedDate ? (
-                                format(selectedDate, "PPP")
-                              ) : (
-                                <span>Pick a date</span>
-                              )}
-                              <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
-                            </Button>
-                          </FormControl>
-                        </PopoverTrigger>
-                        <PopoverContent className="w-auto p-0" align="start">
-                          <Calendar
-                            mode="single"
-                            selected={selectedDate}
-                            onSelect={(date) => {
-                              setSelectedDate(date);
-                              if (date) {
-                                // Default to noon for simplicity, or preserve time if existing
-                                const newDate = new Date(date);
-                                newDate.setHours(12, 0, 0, 0);
-                                field.onChange(newDate.toISOString());
-                              }
-                            }}
-                            disabled={(date) =>
-                              date < new Date(new Date().setHours(0, 0, 0, 0))
-                            }
-                            initialFocus
-                          />
-                        </PopoverContent>
-                      </Popover>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                
-                <Button type="submit" className="w-full mt-4" disabled={createSchedule.isPending}>
-                  {createSchedule.isPending ? "Scheduling..." : "Confirm Schedule"}
+            <Form {...form}>
+              <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 pt-2">
+                {/* Reel picker */}
+                <FormField control={form.control} name="reelId" render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Select Reel</FormLabel>
+                    <Select onValueChange={(v) => field.onChange(parseInt(v))} value={String(field.value ?? "")}>
+                      <FormControl>
+                        <SelectTrigger><SelectValue placeholder="Choose a reel…" /></SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {reels?.map((r) => (
+                          <SelectItem key={r.id} value={r.id.toString()}>
+                            {r.quote.length > 45 ? r.quote.slice(0, 45) + "…" : r.quote}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )} />
+
+                {/* Platform picker */}
+                <FormField control={form.control} name="platform" render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Platform</FormLabel>
+                    <Select onValueChange={field.onChange} value={field.value}>
+                      <FormControl>
+                        <SelectTrigger><SelectValue placeholder="Select platform…" /></SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {PLATFORMS.map((p) => (
+                          <SelectItem key={p.id} value={p.id}>
+                            <div className="flex items-center gap-2">
+                              <p.icon className={cn("h-4 w-4", p.color)} />
+                              {p.name}
+                            </div>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )} />
+
+                {/* Publish Now button */}
+                <Button type="button" variant="outline" className="w-full gap-2 border-primary/40 text-primary hover:bg-primary/10"
+                  onClick={handlePublishNow} disabled={createSchedule.isPending}>
+                  <Zap className="h-4 w-4" />
+                  Publish Now
+                </Button>
+
+                <div className="flex items-center gap-3">
+                  <Separator className="flex-1 opacity-40" />
+                  <span className="text-xs text-muted-foreground">or schedule for later</span>
+                  <Separator className="flex-1 opacity-40" />
+                </div>
+
+                {/* Date picker */}
+                <FormField control={form.control} name="scheduledAt" render={({ field }) => (
+                  <FormItem className="flex flex-col">
+                    <FormLabel>Date</FormLabel>
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <FormControl>
+                          <Button variant="outline"
+                            className={cn("w-full pl-3 text-left font-normal bg-card/50", !selectedDate && "text-muted-foreground")}>
+                            {selectedDate ? format(selectedDate, "PPP") : <span>Pick a date</span>}
+                            <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                          </Button>
+                        </FormControl>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-auto p-0" align="start">
+                        <Calendar
+                          mode="single"
+                          selected={selectedDate}
+                          onSelect={(date) => {
+                            setSelectedDate(date);
+                            if (date) field.onChange(buildScheduledAt(date, selectedTime));
+                          }}
+                          disabled={(date) => date < new Date(new Date().setHours(0, 0, 0, 0))}
+                          initialFocus
+                        />
+                      </PopoverContent>
+                    </Popover>
+                    <FormMessage />
+                  </FormItem>
+                )} />
+
+                {/* Time picker */}
+                <FormField control={form.control} name="scheduledAt" render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="flex items-center gap-1.5">
+                      <Clock className="h-3.5 w-3.5" /> Time
+                    </FormLabel>
+                    <FormControl>
+                      <Input
+                        type="time"
+                        value={selectedTime}
+                        onChange={(e) => {
+                          setSelectedTime(e.target.value);
+                          field.onChange(buildScheduledAt(selectedDate, e.target.value));
+                        }}
+                        className="bg-card/50 border-border/60"
+                      />
+                    </FormControl>
+                  </FormItem>
+                )} />
+
+                <p className="text-[11px] text-muted-foreground text-center">
+                  {selectedDate && `Posting ${format(selectedDate, "EEE, MMM d")} at ${selectedTime}`}
+                </p>
+
+                <Button type="submit" className="w-full" disabled={createSchedule.isPending}>
+                  {createSchedule.isPending ? "Scheduling…" : "Confirm Schedule"}
                 </Button>
               </form>
             </Form>
@@ -216,25 +242,34 @@ export default function Schedule() {
         </Dialog>
       </div>
 
+      {/* Schedule list */}
       <div className="bg-card border border-border rounded-xl shadow-sm overflow-hidden">
         {loadingSchedules ? (
           <div className="p-6 space-y-4">
-            {[1, 2, 3].map(i => <Skeleton key={i} className="h-16 w-full" />)}
+            {[1, 2, 3].map((i) => <Skeleton key={i} className="h-16 w-full" />)}
           </div>
         ) : sortedSchedules.length > 0 ? (
           <div className="divide-y divide-border">
             {sortedSchedules.map((schedule) => {
-              const platform = PLATFORMS.find(p => p.id === schedule.platform) || PLATFORMS[0];
+              const platform = PLATFORMS.find((p) => p.id === schedule.platform) || PLATFORMS[0];
               const PlatformIcon = platform.icon;
               const date = new Date(schedule.scheduledAt);
-              
+              const isNow = Math.abs(Date.now() - date.getTime()) < 60_000;
+
               return (
-                <div key={schedule.id} className="p-4 sm:p-6 flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between hover:bg-muted/30 transition-colors">
+                <div key={schedule.id}
+                  className="p-4 sm:p-6 flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between hover:bg-muted/30 transition-colors">
                   <div className="flex items-center gap-4">
+                    {/* Date block */}
                     <div className="flex flex-col items-center justify-center bg-background border border-border rounded-lg h-14 w-14 shrink-0">
-                      <span className="text-xs font-semibold text-muted-foreground uppercase">{format(date, "MMM")}</span>
-                      <span className="text-xl font-bold leading-none">{format(date, "d")}</span>
+                      <span className="text-xs font-semibold text-muted-foreground uppercase">
+                        {isNow ? "Now" : format(date, "MMM")}
+                      </span>
+                      <span className="text-xl font-bold leading-none">
+                        {isNow ? <Zap className="h-5 w-5 text-primary" /> : format(date, "d")}
+                      </span>
                     </div>
+
                     <div>
                       <div className="flex items-center gap-2 mb-1">
                         <Badge variant="outline" className={cn("bg-background gap-1.5", platform.color)}>
@@ -244,26 +279,21 @@ export default function Schedule() {
                         <span className="text-sm font-medium text-muted-foreground">
                           {format(date, "h:mm a")}
                         </span>
-                        <Badge variant={schedule.status === 'posted' ? 'default' : 'secondary'} className="text-[10px] h-5 uppercase">
+                        <Badge
+                          variant={schedule.status === "posted" ? "default" : "secondary"}
+                          className="text-[10px] h-5 uppercase">
                           {schedule.status}
                         </Badge>
                       </div>
                       <p className="font-serif font-medium line-clamp-1 text-foreground/90">
-                        {schedule.reel ? `"${schedule.reel.quote}"` : "Reel missing or deleted"}
+                        {schedule.reel ? `"${schedule.reel.quote}"` : "Reel deleted"}
                       </p>
                     </div>
                   </div>
-                  
-                  <Button 
-                    variant="ghost" 
-                    size="sm" 
+
+                  <Button variant="ghost" size="sm"
                     className="text-muted-foreground hover:text-destructive shrink-0"
-                    onClick={() => {
-                      if (confirm("Cancel this schedule?")) {
-                        deleteSchedule.mutate({ id: schedule.id });
-                      }
-                    }}
-                  >
+                    onClick={() => { if (confirm("Cancel this schedule?")) deleteSchedule.mutate({ id: schedule.id }); }}>
                     <Trash2 className="h-4 w-4 mr-2" />
                     Cancel
                   </Button>
@@ -274,8 +304,8 @@ export default function Schedule() {
         ) : (
           <div className="p-12 text-center flex flex-col items-center">
             <CalendarIcon className="h-12 w-12 text-muted-foreground opacity-30 mb-4" />
-            <h3 className="text-lg font-medium text-foreground mb-1">No scheduled posts</h3>
-            <p className="text-muted-foreground">You don't have any reels queued up for publishing.</p>
+            <h3 className="text-lg font-medium">No scheduled posts</h3>
+            <p className="text-muted-foreground text-sm">Schedule reels to post them automatically.</p>
           </div>
         )}
       </div>
