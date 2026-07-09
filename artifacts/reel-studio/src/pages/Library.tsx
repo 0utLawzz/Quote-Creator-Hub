@@ -6,11 +6,13 @@ import {
   useListReels, 
   useDeleteReel, 
   useToggleReelFavorite,
+  useUpdateReel,
   Reel 
 } from "@workspace/api-client-react";
 import { 
   Search, Star, Trash2, Edit3, CalendarPlus, 
-  Download, Filter, MoreVertical, PlayCircle
+  Download, Filter, MoreVertical, PlayCircle,
+  CheckCircle2, RotateCcw, Send
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -31,7 +33,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { getListReelsQueryKey } from "@workspace/api-client-react";
+import { getListReelsQueryKey, getGetStatsQueryKey, getGetRecentReelsQueryKey } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 
 export default function Library() {
@@ -61,10 +63,22 @@ export default function Library() {
 
   const toggleFavorite = useToggleReelFavorite({
     mutation: {
-      onSuccess: (data) => {
-        // Optimistic update could go here
+      onSuccess: () => {
         queryClient.invalidateQueries({ queryKey: getListReelsQueryKey() });
       }
+    }
+  });
+
+  const updateReel = useUpdateReel({
+    mutation: {
+      onSuccess: (data) => {
+        const label = data.status === "posted" ? "Marked as posted" : "Marked as draft";
+        toast({ title: label });
+        queryClient.invalidateQueries({ queryKey: getListReelsQueryKey() });
+        queryClient.invalidateQueries({ queryKey: getGetStatsQueryKey() });
+        queryClient.invalidateQueries({ queryKey: getGetRecentReelsQueryKey() });
+      },
+      onError: () => toast({ title: "Update failed", variant: "destructive" }),
     }
   });
 
@@ -189,6 +203,21 @@ export default function Library() {
                     <DropdownMenuItem>
                       <Download className="mr-2 h-4 w-4" /> Download
                     </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    {reel.status !== "posted" ? (
+                      <DropdownMenuItem
+                        onClick={() => updateReel.mutate({ id: reel.id, data: { status: "posted" } })}
+                      >
+                        <Send className="mr-2 h-4 w-4 text-emerald-500" />
+                        <span className="text-emerald-600 dark:text-emerald-400">Mark as Posted</span>
+                      </DropdownMenuItem>
+                    ) : (
+                      <DropdownMenuItem
+                        onClick={() => updateReel.mutate({ id: reel.id, data: { status: "draft" } })}
+                      >
+                        <RotateCcw className="mr-2 h-4 w-4" /> Revert to Draft
+                      </DropdownMenuItem>
+                    )}
                     <DropdownMenuSeparator />
                     <DropdownMenuItem 
                       className="text-destructive focus:bg-destructive/10 focus:text-destructive"

@@ -441,7 +441,7 @@ function drawQuoteScene(
   ctx.stroke();
 }
 
-function drawAuthorScene(ctx: CanvasRenderingContext2D, cfg: VideoConfig, W: number, H: number) {
+function drawAuthorScene(ctx: CanvasRenderingContext2D, cfg: VideoConfig, W: number, H: number, _ms: number, _timing: SceneTiming) {
   const cx = W / 2;
   const cy = H / 2;
   const scale = W / 1080;

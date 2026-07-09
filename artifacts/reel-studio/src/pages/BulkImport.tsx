@@ -23,6 +23,8 @@ const CATEGORIES = [
 
 const DEFAULT_CATEGORY = "motivation";
 const DEFAULT_TEMPLATE = "dark-gold";
+const DEFAULT_STATUS = "draft" as const;
+type ReelStatus = "draft" | "posted";
 
 interface Entry {
   id: string;
@@ -117,6 +119,7 @@ export default function BulkImport() {
   const [isImporting, setIsImporting] = useState(false);
   const [importProgress, setImportProgress] = useState(0);
   const [defaultCategory, setDefaultCategory] = useState(DEFAULT_CATEGORY);
+  const [defaultStatus, setDefaultStatus] = useState<ReelStatus>(DEFAULT_STATUS);
   const [previewEntry, setPreviewEntry] = useState<Entry | null>(null);
 
   const handleParse = useCallback(() => {
@@ -188,6 +191,7 @@ export default function BulkImport() {
                 author: entry.author.trim() || undefined,
                 category: entry.category,
                 templateId: DEFAULT_TEMPLATE,
+                status: defaultStatus,
               },
             },
             {
@@ -281,21 +285,37 @@ export default function BulkImport() {
             ))}
           </div>
 
-          {/* Default category */}
-          <div className="flex items-center gap-4">
-            <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground whitespace-nowrap">
-              Default category
-            </label>
-            <Select value={defaultCategory} onValueChange={setDefaultCategory}>
-              <SelectTrigger className="w-48 bg-card/50 border-border/60 capitalize">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {CATEGORIES.map((c) => (
-                  <SelectItem key={c} value={c} className="capitalize">{c}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+          {/* Default category + status */}
+          <div className="flex flex-wrap items-center gap-6">
+            <div className="flex items-center gap-3">
+              <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground whitespace-nowrap">
+                Default category
+              </label>
+              <Select value={defaultCategory} onValueChange={setDefaultCategory}>
+                <SelectTrigger className="w-44 bg-card/50 border-border/60 capitalize">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {CATEGORIES.map((c) => (
+                    <SelectItem key={c} value={c} className="capitalize">{c}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex items-center gap-3">
+              <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground whitespace-nowrap">
+                Create as
+              </label>
+              <Select value={defaultStatus} onValueChange={(v) => setDefaultStatus(v as ReelStatus)}>
+                <SelectTrigger className="w-36 bg-card/50 border-border/60">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="draft">Draft</SelectItem>
+                  <SelectItem value="posted">Posted</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
           </div>
 
           {/* Paste area */}

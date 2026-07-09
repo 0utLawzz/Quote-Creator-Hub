@@ -40,11 +40,21 @@ export interface Reel {
   createdAt: string;
 }
 
+export type ReelInputStatus = typeof ReelInputStatus[keyof typeof ReelInputStatus];
+
+
+export const ReelInputStatus = {
+  draft: 'draft',
+  posted: 'posted',
+  scheduled: 'scheduled',
+} as const;
+
 export interface ReelInput {
   quote: string;
   author?: string;
   category: string;
   templateId: string;
+  status?: ReelInputStatus;
   captionText?: string;
   hashtags?: string;
   platforms?: string;

@@ -5,12 +5,14 @@
  * Reel Studio API
  * OpenAPI spec version: 0.1.0
  */
+import type { ReelInputStatus } from './reelInputStatus';
 
 export interface ReelInput {
   quote: string;
   author?: string;
   category: string;
   templateId: string;
+  status?: ReelInputStatus;
   captionText?: string;
   hashtags?: string;
   platforms?: string;

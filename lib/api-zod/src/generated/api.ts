@@ -48,6 +48,7 @@ export const CreateReelBody = zod.object({
   "author": zod.string().optional(),
   "category": zod.string(),
   "templateId": zod.string(),
+  "status": zod.enum(['draft', 'posted', 'scheduled']).optional(),
   "captionText": zod.string().optional(),
   "hashtags": zod.string().optional(),
   "platforms": zod.string().optional()

@@ -13,6 +13,7 @@ export * from './listReelsParams';
 export * from './quoteRequest';
 export * from './reel';
 export * from './reelInput';
+export * from './reelInputStatus';
 export * from './reelStatus';
 export * from './reelUpdate';
 export * from './reelUpdateStatus';
