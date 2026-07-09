@@ -1,0 +1,1 @@
+- [Reel Studio architecture](reel-studio-arch.md) — key decisions for video-renderer, CreateReel controls, and text effects canvas rendering
