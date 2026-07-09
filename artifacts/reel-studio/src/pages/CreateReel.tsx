@@ -82,6 +82,7 @@ export default function CreateReel() {
   const [captionText, setCaptionText] = useState("");
   const [hashtags, setHashtags] = useState("");
   const [selectedPlatforms, setSelectedPlatforms] = useState<string[]>(["Instagram"]);
+  const [status, setStatus] = useState<"draft" | "posted" | "scheduled">("draft");
   const [brandName, setBrandName] = useState("REEL STUDIO");
 
   // ── Visual state ───────────────────────────────────────────────────────
@@ -137,6 +138,7 @@ export default function CreateReel() {
       setAuthor(existingReel.author ?? "");
       setCategory(existingReel.category);
       setSelectedTemplateId(existingReel.templateId);
+      setStatus((existingReel.status as "draft" | "posted" | "scheduled") ?? "draft");
       setCaptionText(existingReel.captionText ?? "");
       setHashtags(existingReel.hashtags ?? "");
       if (existingReel.platforms) {
@@ -232,6 +234,7 @@ export default function CreateReel() {
     const data = {
       quote: quote.trim(), author: author.trim() || undefined, category,
       templateId: selectedTemplateId,
+      status,
       captionText: captionText.trim() || undefined,
       hashtags: hashtags.trim() || undefined,
       platforms: selectedPlatforms.join(",") || undefined,
@@ -425,8 +428,141 @@ export default function CreateReel() {
     <div className="flex h-full flex-col lg:flex-row overflow-hidden animate-in fade-in duration-500">
 
       {/* ── Left Panel ── */}
-      <div className="w-full lg:w-[440px] xl:w-[480px] flex-shrink-0 border-r border-border overflow-y-auto bg-sidebar/40">
+      <div className="w-full lg:w-[440px] xl:w-[480px] flex-shrink-0 lg:border-r border-border overflow-y-auto bg-sidebar/40 order-2 lg:order-1">
         <div className="p-6 space-y-5">
+
+          {/* Mobile simplified form */}
+          <div className="lg:hidden space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <h1 className="text-xl font-bold tracking-tight">{editId ? "Edit Reel" : "Create Reel"}</h1>
+                <p className="text-xs text-muted-foreground mt-0.5">Quote, author, and publish.</p>
+              </div>
+              <div className="flex items-center gap-2">
+                {mode === "image" ? (
+                  <Button variant="outline" size="sm" onClick={handleDownloadImage}
+                    disabled={isDownloading || !quote.trim()} className="border-border/60">
+                    {isDownloading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
+                    <span className="ml-1.5 text-xs">PNG</span>
+                  </Button>
+                ) : (
+                  <Button variant="outline" size="sm" onClick={handleExportVideo}
+                    disabled={isRecording || !quote.trim()} className="border-border/60">
+                    {isRecording ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Video className="h-3.5 w-3.5" />}
+                    <span className="ml-1.5 text-xs">{isRecording ? `${videoProgress}%` : "Export"}</span>
+                  </Button>
+                )}
+                <Button size="sm" onClick={handleSave} disabled={isSaving || !quote.trim()}
+                  className="font-semibold shadow-primary/20 shadow-md">
+                  {isSaving ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    : saved ? <Check className="h-3.5 w-3.5" />
+                    : <Save className="h-3.5 w-3.5" />}
+                  <span className="ml-1.5 text-xs">{saved ? "Saved" : "Save"}</span>
+                </Button>
+              </div>
+            </div>
+
+            <div className="flex rounded-lg overflow-hidden border border-border/60 p-0.5 bg-card/50">
+              {(["image", "video"] as Mode[]).map((m) => (
+                <button key={m} onClick={() => setMode(m)}
+                  className={cn(
+                    "flex-1 flex items-center justify-center gap-1.5 py-2 rounded-md text-xs font-semibold transition-all duration-200",
+                    mode === m ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
+                  )}>
+                  {m === "image" ? <Image className="h-3.5 w-3.5" /> : <Video className="h-3.5 w-3.5" />}
+                  {m === "image" ? "Image" : "Video"}
+                </button>
+              ))}
+            </div>
+
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Quote</Label>
+                <Button variant="ghost" size="sm" onClick={handleGenerate} disabled={generateQuote.isPending}
+                  className="h-7 px-2 text-xs text-primary hover:text-primary hover:bg-primary/10 font-medium">
+                  {generateQuote.isPending ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : <Sparkles className="h-3 w-3 mr-1" />}
+                  Generate
+                </Button>
+              </div>
+              <Textarea value={quote} onChange={(e) => setQuote(e.target.value)}
+                placeholder="Enter your quote or click Generate..."
+                className="min-h-[80px] resize-none bg-card/50 border-border/60 text-sm leading-relaxed font-serif" />
+              <p className="text-right text-xs text-muted-foreground">{quote.length} chars</p>
+            </div>
+
+            <div className="space-y-2">
+              <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Author</Label>
+              <Input value={author} onChange={(e) => setAuthor(e.target.value)}
+                placeholder="e.g. Marcus Aurelius" className="bg-card/50 border-border/60 text-sm" />
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Category</Label>
+                <Select value={category} onValueChange={setCategory}>
+                  <SelectTrigger className="bg-card/50 border-border/60 capitalize">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {CATEGORIES.map((c) => (
+                      <SelectItem key={c} value={c} className="capitalize">{c}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Status</Label>
+                <Select value={status} onValueChange={(v) => setStatus(v as typeof status)}>
+                  <SelectTrigger className="bg-card/50 border-border/60 capitalize">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {(["draft", "posted", "scheduled"] as const).map((s) => (
+                      <SelectItem key={s} value={s} className="capitalize">{s}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Caption</Label>
+              <Textarea value={captionText} onChange={(e) => setCaptionText(e.target.value)}
+                placeholder="Caption for your post..."
+                className="min-h-[60px] resize-none bg-card/50 border-border/60 text-sm" />
+            </div>
+
+            <div className="space-y-2">
+              <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Hashtags</Label>
+              <Input value={hashtags} onChange={(e) => setHashtags(e.target.value)}
+                placeholder="#motivation #mindset #quotes"
+                className="bg-card/50 border-border/60 text-sm font-mono" />
+            </div>
+
+            <div className="space-y-2">
+              <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Platforms</Label>
+              <div className="flex flex-wrap gap-2">
+                {PLATFORMS.map((platform) => (
+                  <button key={platform} onClick={() => togglePlatform(platform)}
+                    className={cn(
+                      "px-3 py-1.5 rounded-md text-xs font-medium border transition-all duration-200",
+                      selectedPlatforms.includes(platform)
+                        ? "bg-primary text-primary-foreground border-primary shadow-sm shadow-primary/20"
+                        : "bg-card/50 text-muted-foreground border-border/60 hover:border-border hover:text-foreground"
+                    )}>
+                    {platform}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <p className="text-xs text-muted-foreground text-center">
+              For fonts, colors, animations, and music use the desktop studio.
+            </p>
+          </div>
+
+          {/* Desktop form */}
+          <div className="hidden lg:block space-y-5">
 
           {/* Header + actions */}
           <div className="flex items-center justify-between">
@@ -513,6 +649,21 @@ export default function CreateReel() {
             <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Author</Label>
             <Input value={author} onChange={(e) => setAuthor(e.target.value)}
               placeholder="e.g. Marcus Aurelius" className="bg-card/50 border-border/60 text-sm" />
+          </div>
+
+          {/* Status */}
+          <div className="space-y-2">
+            <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Status</Label>
+            <Select value={status} onValueChange={(v) => setStatus(v as typeof status)}>
+              <SelectTrigger className="bg-card/50 border-border/60 capitalize">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {(["draft", "posted", "scheduled"] as const).map((s) => (
+                  <SelectItem key={s} value={s} className="capitalize">{s}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
 
           <Separator className="opacity-40" />
@@ -698,11 +849,11 @@ export default function CreateReel() {
           <div className="space-y-3">
             <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Visual Template</Label>
             {templatesLoading ? (
-              <div className="grid grid-cols-4 gap-2">
+              <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
                 {[...Array(8)].map((_, i) => <Skeleton key={i} className="aspect-[9/16] rounded-lg" />)}
               </div>
             ) : (
-              <div className="grid grid-cols-4 gap-2">
+              <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
                 {templates?.map((template) => (
                   <button key={template.id}
                     onClick={() => { setSelectedTemplateId(template.id); setUseCustomTemplate(false); }}
@@ -983,7 +1134,7 @@ export default function CreateReel() {
                 ) : (
                   <div className="space-y-2">
                     <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Built-in Tracks</p>
-                    <div className="grid grid-cols-2 gap-1.5">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
                       {BUILTIN_TRACKS.map((track) => (
                         <button key={track.id}
                           onClick={() => { setAudioUrl(track.url); setAudioName(track.name); }}
@@ -1017,7 +1168,7 @@ export default function CreateReel() {
             </Label>
             {mode === "video" ? (
               <>
-                <div className="grid grid-cols-3 gap-1.5">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-1.5">
                   {QUALITY_PRESETS.map((q) => (
                     <button key={q.id} onClick={() => setQuality(q.id)}
                       className={cn(
@@ -1039,7 +1190,7 @@ export default function CreateReel() {
               </>
             ) : (
               <>
-                <div className="grid grid-cols-3 gap-1.5">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-1.5">
                   {[
                     { scale: 2, label: "1080p", note: "Fast" },
                     { scale: 3, label: "2K",    note: "Standard" },
@@ -1103,11 +1254,12 @@ export default function CreateReel() {
           </div>
 
           <div className="pb-4" />
+          </div>
         </div>
       </div>
 
       {/* ── Right Panel — Preview ── */}
-      <div className="flex-1 flex flex-col items-center justify-center bg-background p-6 overflow-y-auto">
+      <div className="flex-1 flex flex-col items-center justify-center bg-background p-4 lg:p-6 overflow-y-auto order-1 lg:order-2 min-h-[50vh] lg:min-h-0">
         <div className="mb-4 text-center">
           <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
             {mode === "image" ? "Image Preview" : "Video Preview"}
